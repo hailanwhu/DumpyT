@@ -423,7 +423,8 @@ void materializeInterNode(DumpyNode *node, unsigned short *saxes) {
 DumpyNode *DumpyNode::BuildIndex(string &datafn, string &saxfn) {
     Const::logPrint("Start building index.");
     FileUtil::checkDirClean(Const::idxfn.c_str());
-    long series_num = generateSaxTbl();
+//    long series_num = generateSaxTbl();
+    long series_num = loadSax(saxfn);
 
     auto* root = new DumpyNode();
     root->size = series_num;

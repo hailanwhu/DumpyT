@@ -26,6 +26,43 @@ bool comp_tardis_cand(const cand_tardis& x, const cand_tardis& y){
     return x.lb < y.lb;
 }
 
+vector<PqItemSeries *> * DumpyInMemorySearch::thresholdSearch(FullAryTreeNode *root, float *query, double threshold, long *ts_count){
+    auto* queryTs = new TimeSeries(query);
+    t_paa = queryTs->paa;
+    auto*heap = new vector<PqItemSeries*>();
+
+    unsigned short sax[Const::segmentNum];
+    for(int i=0;i<Const::segmentNum;++i)
+        sax[i] = (*(queryTs->sax))[i];
+
+    thresholdSearchSub(root, sax, queryTs, threshold, heap, ts_count);
+    delete queryTs;
+    sort(heap->begin(), heap->end(), PqItemSeriesMaxHeap());
+    return heap;
+}
+
+void DumpyInMemorySearch::thresholdSearchSub(FullAryTreeNode* root, unsigned short *sax, TimeSeries* queryTs, double threshold, vector<PqItemSeries*>*heap, long *ts_count){
+    if(root->isLeafNode())  return;
+    FullAryTreeNode *parent = root;
+
+    vector<cand_tardis>candidates;
+    candidates.reserve((*parent->children).size());
+    for(auto &iter:(*parent->children)) {
+        double lb = SaxUtil::LowerBound_Paa_iSax(t_paa, iter.second->sax, iter.second->layer);
+        if (lb <= threshold) {
+            candidates.emplace_back(iter.second, lb);
+        }
+    }
+    for(int i=0;i<candidates.size();++i){
+        if(candidates[i].node->isLeafNode())
+            candidates[i].node->thresholdSearch(threshold, queryTs, *heap, ts_count);
+        else
+            thresholdSearchSub(candidates[i].node, sax, queryTs, threshold, heap, ts_count);
+    }
+    return;
+
+}
+
 vector<PqItemSeries *> * DumpyInMemorySearch::approxSearch(FullAryTreeNode* root, float* query, int k, int threshold){
     auto* queryTs = new TimeSeries(query);
     t_paa = queryTs->paa;

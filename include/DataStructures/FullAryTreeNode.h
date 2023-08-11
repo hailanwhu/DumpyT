@@ -12,10 +12,15 @@
 #include "../Utils/SaxUtil.h"
 #include "TimeSeries.h"
 #include "PqItemSeries.h"
+//#include "/research/local/hai/boost/boost_install/include/boost/archive/binary_iarchive.hpp"
+//#include "/research/local/hai/boost/boost_install/include/boost/archive/binary_oarchive.hpp"
+//#include "/research/local/hai/boost/boost_install/include/boost/serialization/vector.hpp"
+//#include "/research/local/hai/boost/boost_install/include/boost/serialization/string.hpp"
+//#include "/research/local/hai/boost/boost_install/include/boost/serialization/unordered_map.hpp"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
-#include <boost/serialization/vector.hpp>
 #include <boost/serialization/string.hpp>
+#include <boost/serialization/vector.hpp>
 #include <boost/serialization/unordered_map.hpp>
 
 using namespace std;
@@ -82,6 +87,9 @@ public:
 
     static FullAryTreeNode *loadFromDisk(const string &idxfn);
 
+//    static void loadPaa(const string & paafn);
+    static int loadSax(const string & saxfn);
+
     int getLeafNodeNumber(FullAryTreeNode *root);
 
     int getHeight(FullAryTreeNode *root);
@@ -102,6 +110,8 @@ public:
 
     void exactSearchKnnInMemory(int k, TimeSeries *queryTs, vector<PqItemSeries *> &heap, int &threshold) const;
 
+    void thresholdSearch(double threshold, TimeSeries *queryTs, vector<PqItemSeries *> &heap, long *ts_count) const;
+
     int getTotalSize(FullAryTreeNode *root);
 
     int getNodeNumber(FullAryTreeNode *root);
@@ -113,6 +123,10 @@ public:
     static void generateSaxTbl();
 
     void getLeafNodeSize(FullAryTreeNode *root, ofstream &f);
+
+    void storeTSInLeafNode();
+
+    bool store_ts_leaf_node(FullAryTreeNode * root);
 };
 
 

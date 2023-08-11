@@ -25,7 +25,7 @@ public:
     // segment number is special, it needs to be specified here
     const static int segmentNum = 16;
     static int th, bitsCardinality, delta, r_max, fbl_size, max_diff, fbl_series_num;
-    static double fuzzy_f_1st, fuzzy_f, alpha_1st, alpha, small_perc, max_mask_bit_percentage, f_low, f_high;
+    static double fuzzy_f_1st, fuzzy_f, alpha_1st, alpha, small_perc, max_mask_bit_percentage, f_low, f_high, threshold;
 
     //sec: others
     static string graphfn, breakpointsfn;
@@ -104,6 +104,8 @@ public:
 
         f_high = reader.GetReal("parameter", "f_high", 0.5);
         cout << "weighting factor: " << f_high << endl;
+
+        threshold = reader.GetReal("parameter", "threshold", 0.005);
 
         max_mask_bit_percentage = reader.GetReal("parameter", "max_mask_bit_percentage", 0.5);
         cout << "filling_factor: " << max_mask_bit_percentage << endl;

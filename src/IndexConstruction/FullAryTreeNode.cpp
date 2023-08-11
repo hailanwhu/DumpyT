@@ -25,12 +25,13 @@ static long MAT1_TOTAL_TIME = 0, MAT1_READ_TIME = 0, MAT2_WRITE_TIME = 0, MAT2_T
 
 
 FullAryTreeNode * FullAryTreeNode::BuildFullAryTree() {
-    generateSaxTbl();
-
+//    generateSaxTbl();
+    long series_num = loadSax(Const::saxfn);
+    cout << "Series Number: " << series_num << endl;
     auto* root = new FullAryTreeNode();
     root->children = new unordered_map<int, FullAryTreeNode*>();
 
-    for(int i=0;i<Const::series_num;++i) {
+    for(int i=0;i<series_num;++i) {
         if(i%10000000 == 0)  cout << i << endl;
         root->insert(i);
     }
@@ -74,6 +75,34 @@ FullAryTreeNode* FullAryTreeNode::route(unsigned short *asax) const{
     assert(!isLeafNode());
     int nav_id = SaxUtil::invSaxHeadkFromSax(asax, Const::bitsCardinality, Const::segmentNum, layer + 1);
     return (*children)[nav_id];
+}
+
+void FullAryTreeNode::thresholdSearch(double threshold, TimeSeries *queryTs, vector<PqItemSeries *> &heap, long *ts_count) const{
+    if(isLeafNode()){
+        float *ts;
+        unsigned short *t_sax;
+//        cout << "Leaf Node Size: " << size << endl;
+//        if (size == 1777) {
+//            cout << "0" << endl;
+//        }
+        for(int offset: offsets){
+            t_sax = saxes + (long)offset * Const::segmentNum;
+            double lb = SaxUtil::LowerBound_Paa_iSax(queryTs->paa, t_sax, Const::bitsCardinality);
+            if (lb <= threshold) {
+                ts = dataset + (long)offset * Const::tsLength;
+                *ts_count = (*ts_count) + 1;
+                double dist = TimeSeriesUtil::euclideanDist(queryTs->ts, ts, Const::tsLength);
+                if (dist <= threshold) {
+                    heap.push_back(new PqItemSeries(ts, dist));
+                }
+            }
+        }
+    } else {
+        for(auto & iter : *children)
+            if(iter.second != nullptr)
+                iter.second->thresholdSearch(threshold, queryTs, heap, ts_count);
+    }
+    return;
 }
 
 void FullAryTreeNode::exactSearchKnnInMemory(int k, TimeSeries *queryTs, vector<PqItemSeries *> &heap) const {
@@ -166,7 +195,8 @@ void FullAryTreeNode::exactSearchKnn(int k, TimeSeries *queryTs, vector<PqItemSe
 }
 
 FullAryTreeNode *FullAryTreeNode::loadFromDisk(const string &idxfn) {
-    long num = (long)Const::series_num * Const::tsLength;
+    long series_num = loadSax(Const::saxfn);
+    long num = series_num * Const::tsLength;
     dataset = new float[num];
     FILE *f = fopen(Const::datafn.c_str(), "rb");
     fread(dataset, sizeof(float), num, f);
@@ -178,6 +208,16 @@ FullAryTreeNode *FullAryTreeNode::loadFromDisk(const string &idxfn) {
     ifs.close();
     return g;
 
+}
+
+int FullAryTreeNode::loadSax(const string & saxfn){
+    long f_size = FileUtil::getFileSize(saxfn.c_str()), series_num = f_size / (sizeof(unsigned short) * Const::segmentNum);
+    saxes = new unsigned short [f_size / sizeof(unsigned short )];
+    FILE *f = fopen(saxfn.c_str(), "rb");
+    fread(saxes, sizeof(unsigned short ), f_size / sizeof(unsigned short), f);
+    fclose(f);
+    Const::logPrint("Finish loading sax");
+    return series_num;
 }
 
 void FullAryTreeNode::mergingTardis(FullAryTreeNode* root){
@@ -312,9 +352,48 @@ int FullAryTreeNode::getGraphNum(FullAryTreeNode* root){
     return sum;
 }
 
+bool FullAryTreeNode::store_ts_leaf_node(FullAryTreeNode * root) {
+    if(root == nullptr) return false;
+    if(root->size <= Const::th && root->size >= 100){ //todo: add const later
+        cout << "size: " << root->size << endl;
+        FILE *outf = fopen("../data/query_partition.out", "a");
+        long offset = root->offsets[0];
+        fwrite(dataset + offset * Const::tsLength, sizeof(float), Const::tsLength, outf);
+        offset = root->offsets[1];
+        fwrite(dataset + offset * Const::tsLength, sizeof(float), Const::tsLength, outf);
+        fclose(outf);
+        return true;
+    } else if (root->size <= Const::th) return false;
+    int sum = 0;
+    bool found = false;
+    for(auto& iter:*root->children){
+        if(iter.second == nullptr) continue;
+        if(iter.second->size <= Const::th){
+            if (iter.second->size >= 100) {
+                cout << "size: " << iter.second->size << endl;
+                FILE *outf = fopen("../data/query_partition.out", "a");
+                long offset = iter.second->offsets[0];
+                fwrite(dataset + offset * Const::tsLength, sizeof(float), Const::tsLength, outf);
+                offset = iter.second->offsets[1];
+                fwrite(dataset + offset * Const::tsLength, sizeof(float), Const::tsLength, outf);
+                fclose(outf);
+                found = true;
+            }
+        }else{
+            found = store_ts_leaf_node(iter.second);
+        }
+        if (found) return true;
+    }
+    return found;
+}
+void FullAryTreeNode::storeTSInLeafNode() {
+//    ofstream outfile;
+//    outfile.open("../data/query_partition.out", ios::out | ios::app);//输入文件的路径
+    store_ts_leaf_node(this);
+}
 void FullAryTreeNode::getIndexStats(){
     ofstream outfile;
-    outfile.open("/mnt/c/codes/rand-leaf.out", ios::out | ios::app);//输入文件的路径
+    outfile.open("../data/rand-leaf.out", ios::out | ios::app);//输入文件的路径
     getLeafNodeSize(this, outfile);
     int total_leaf_node_num = getLeafNodeNumber(this);
     int total_size = getTotalSize(this);

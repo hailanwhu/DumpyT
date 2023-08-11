@@ -3,6 +3,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <set>
+#include <random>
 #include "../include/DataStructures/DumpyNode.h"
 #include "../include/DataStructures/GraphConstruction.h"
 #include "../include/Searchers/DumpySearcher.h"
@@ -11,6 +13,7 @@
 #include "../include/Utils/FileUtil.h"
 #include "../include/Utils/MathUtil.h"
 #include "../include/Utils/TimeSeriesUtil.h"
+#include "../include/Utils/SaxUtil.h"
 using namespace std;
 
 vector<vector<int>>* loadGraphSkeleton(){
@@ -43,6 +46,27 @@ void buildInMemoryIndexDumpy(){
     root->save2Disk(Const::memoryidxfn);
 }
 
+void searchInMemoryThreshold() {
+    FullAryTreeNode* root = FullAryTreeNode::loadFromDisk(Const::memoryidxfn);
+    cout << "load finish." << endl;
+    float *queries = FileUtil::readQueries();
+    for(int i=0;i<Const::query_num;++i){
+        Const::logPrint("Query " + to_string(i) +":");
+        cout << "Threshold: " << Const::threshold << endl;
+        long ts_count = 0;
+        vector<PqItemSeries*> *approxKnn = DumpyInMemorySearch::thresholdSearch(root, queries + i * Const::tsLength, Const::threshold, &ts_count);
+        Const::logPrint("Results:");
+        cout << "Result Size: " << approxKnn->size() << endl;
+        cout << "Calculate TS: " << ts_count << endl;
+        for (int j = 0; j < approxKnn->size(); ++j) {
+            cout << j + 1 << ": " << (*approxKnn)[j]->dist << "------" << TimeSeriesUtil::timeSeries2Line((*approxKnn)[j]->ts) << endl;
+        }
+//        for (int j = 0; j < approxKnn->size(); ++j) {
+//            cout << j + 1 << ": " << (*approxKnn)[j]->dist << endl;
+//        }
+    }
+}
+
 void searchInMemory(){
     FullAryTreeNode* root = FullAryTreeNode::loadFromDisk(Const::memoryidxfn);
     cout << "load finish." << endl;
@@ -54,9 +78,22 @@ void searchInMemory(){
         vector<PqItemSeries*> *approxKnn = DumpyInMemorySearch::approxSearch(root, queries + i * Const::tsLength, Const::k, search_num);
         Const::logPrint("Results:");
         for (int j = 0; j < approxKnn->size(); ++j) {
-            cout << j + 1 << ": " << TimeSeriesUtil::timeSeries2Line((*approxKnn)[j]->ts) << endl;
+            cout << j + 1 << ": " << (*approxKnn)[j]->dist << "------" << TimeSeriesUtil::timeSeries2Line((*approxKnn)[j]->ts) << endl;
         }
     }
+}
+
+void tsProfile() {
+    float *queries = FileUtil::readQueries();
+    cout << fixed <<setprecision(6);
+    float *q1 = queries;
+    float *q2 = queries + Const::tsLength;
+    auto* t1 = new TimeSeries(q1);
+    auto* t2 = new TimeSeries(q2);
+    unsigned short sax[Const::segmentNum];
+    for(int i=0;i<Const::segmentNum;++i)
+        sax[i] = (*(t2->sax))[i];
+    cout << SaxUtil::LowerBound_Paa_iSax(t1->paa,sax, Const::bitsCardinality) << endl;
 }
 
 void statMemoryDumpy(){
@@ -189,11 +226,57 @@ void statIndexDumpy(){
     root->getIndexStats();
 }
 
+void storeTS() {
+    FullAryTreeNode* root = FullAryTreeNode::loadFromDisk(Const::memoryidxfn);
+    cout << "load finish." << endl;
+    root->storeTSInLeafNode();
+}
+
 void statIndexDumpyFuzzy(){
     int bound = Const::fuzzy_f * 100;
     Const::fuzzyidxfn += "/" + to_string(bound) + "-" + to_string(Const::delta) + "/";
     DumpyNode* root = DumpyNode::loadFromDisk(Const::saxfn, Const::fuzzyidxfn + "root.idx", false);
     root->getIndexStats();
+}
+
+std::set<int> generateDistinctIntegers(int count, int minRange, int maxRange) {
+    std::set<int> distinctIntegers;
+
+    // Check if the desired count is within the range
+    if (count > (maxRange - minRange + 1)) {
+        std::cout << "Cannot generate " << count << " distinct integers within the given range." << std::endl;
+        return distinctIntegers;
+    }
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution<int> distribution(minRange, maxRange);
+
+    while (distinctIntegers.size() < count) {
+        int randomNumber = distribution(generator);
+        distinctIntegers.insert(randomNumber);
+    }
+
+    return distinctIntegers;
+}
+
+void genTrainingTS(){
+    FullAryTreeNode* root = FullAryTreeNode::loadFromDisk(Const::memoryidxfn);
+    long f_size = FileUtil::getFileSize(Const::saxfn.c_str()), num = f_size / (sizeof(unsigned short) * Const::segmentNum);
+    cout << "total ts count: " << num << endl;
+
+    std::set<int> distinctIntegers = generateDistinctIntegers(2000000, 0, num);
+    float *sampled = new float [2000000 * Const::tsLength];
+    int i = 0;
+    for (int offset : distinctIntegers) {
+        copy(root->dataset + (long)offset * Const::tsLength,
+             root->dataset + (long)offset * Const::tsLength + Const::tsLength,
+             sampled + (long)i * Const::tsLength);
+        i += 1;
+    }
+    cout << "i: " << i << endl;
+    FILE *outf = fopen("sampled_2m.bin", "a");
+    fwrite(sampled, sizeof(float), 2000000 * Const::tsLength, outf);
 }
 
 int main() {
@@ -246,6 +329,18 @@ int main() {
             if(Const::ops == 0) buildInMemoryIndexDumpy();
             else if(Const::ops == 1) searchInMemory();
             else if(Const::ops == 4)    statMemoryDumpy();
+            else if(Const::ops == 7) searchInMemoryThreshold();
+            else if(Const::ops == 8) storeTS();
+            break;
+        case 4:
+            SaxUtil::generateSaxFile(Const::datafn, Const::saxfn);
+            SaxUtil::generatePaaFile(Const::datafn, Const::paafn);
+            break;
+        case 5:
+            tsProfile();
+            break;
+        case 6:
+            genTrainingTS();
             break;
         default:    break;
     }

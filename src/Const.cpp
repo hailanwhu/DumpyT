@@ -12,7 +12,7 @@ double Const::dtw_window_percent = -1;
 //sec: parameter
 // segment number is special, it needs to be specified here
 int Const::th = -1, Const::bitsCardinality = -1, Const::delta = -1, Const::r_max = -1, Const::fbl_size = -1,Const::max_diff = -1, Const::fbl_series_num = -1;
-double Const::fuzzy_f_1st = -1, Const::fuzzy_f = -1, Const::alpha = -1, Const::small_perc = -1, Const::max_mask_bit_percentage=-1, Const::f_high = -1, Const::f_low=-1;
+double Const::fuzzy_f_1st = -1, Const::fuzzy_f = -1, Const::alpha = -1, Const::small_perc = -1, Const::max_mask_bit_percentage=-1, Const::f_high = -1, Const::f_low=-1, Const::threshold=0.0005;
 
 //sec: others
 string Const::graphfn = "", Const::breakpointsfn = "";

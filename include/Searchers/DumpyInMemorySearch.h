@@ -14,8 +14,12 @@ class DumpyInMemorySearch {
 public:
     static vector<PqItemSeries *> *approxSearch(FullAryTreeNode *root, float *query, int k, int threshold);
 
+    static vector<PqItemSeries *> *thresholdSearch(FullAryTreeNode *root, float *query, double threshold, long *ts_count);
+
     static void approxSearchSub(FullAryTreeNode *root, unsigned short *sax, TimeSeries *queryTs, int k, int threshold,
                                 vector<PqItemSeries *> *heap);
+
+    static void thresholdSearchSub(FullAryTreeNode* root, unsigned short *sax, TimeSeries* queryTs, double threshold, vector<PqItemSeries*>*heap, long *ts_count);
 
 };
 
